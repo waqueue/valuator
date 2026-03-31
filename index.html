@@ -25,12 +25,22 @@
     <script>
         async function getBTCPrice() {
             try {
-                const response = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');
+                // Using Binance API - typically bypasses browser CORS issues
+                const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
                 const data = await response.json();
-                return parseFloat(data.data.amount);
+                if (data && data.price) {
+                    return parseFloat(data.price);
+                }
+                throw new Error("Binance data invalid");
             } catch (error) {
-                console.error("Error fetching BTC price:", error);
-                return null;
+                console.error("Primary API failed, trying Kraken...", error);
+                try {
+                    const res = await fetch('https://api.kraken.com/0/public/Ticker?pair=XBTUSD');
+                    const data = await res.json();
+                    return parseFloat(data.result.XXBTZUSD.c[0]);
+                } catch (e) {
+                    return null;
+                }
             }
         }
 
@@ -49,55 +59,8 @@
             const output = document.getElementById('output');
 
             if (!key) return alert("Please enter an API key first.");
-            if (!imageInput.files || imageInput.files.length === 0) return alert("Please select an image to analyze.");
+            if (!imageInput.files || imageInput.files.length === 0) return alert("Please select an image.");
 
-            output.innerText = "Connecting to the blockchain and analyzing asset...";
+            output.innerText = "Syncing with markets and identifying asset...";
 
             try {
-                const btcPrice = await getBTCPrice();
-                if (!btcPrice) throw new Error("Could not fetch Bitcoin price.");
-
-                const base64Image = await fileToBase64(imageInput.files[0]);
-                const mimeType = imageInput.files[0].type;
-
-                // Explicitly using the stable v1 API endpoint
-                const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${key}`;
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                { text: `Identify this asset. Estimate its market value in USD. Convert that to BTC using the rate: 1 BTC = $${btcPrice.toLocaleString()}. Provide a professional appraisal summary.` },
-                                {
-                                    inline_data: {
-                                        mime_type: mimeType,
-                                        data: base64Image
-                                    }
-                                }
-                            ]
-                        }]
-                    })
-                });
-
-                const result = await response.json();
-                
-                if (result.error) {
-                    throw new Error(result.error.message);
-                }
-
-                if (result.candidates && result.candidates[0].content) {
-                    output.innerText = result.candidates[0].content.parts[0].text;
-                } else {
-                    throw new Error("The AI could not provide an appraisal for this image.");
-                }
-
-            } catch (error) {
-                output.innerText = "Appraisal Failed: " + error.message;
-                console.error(error);
-            }
-        }
-    </script>
-</body>
-</html>
