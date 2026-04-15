@@ -3,84 +3,523 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Valuator Finance | AI Appraiser</title>
+    <title>Interactive AI Appraiser (BTC Live Rate)</title>
+    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font and base styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            color: #1f2937;
+        }
+        /* Mobile-first card styling */
+        .card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-width: 95%;
+        }
+        /* Bitcoin Orange color palette */
+        .bitcoin-orange {
+            background-color: #f7931a;
+            border-color: #e67e22;
+        }
+        .bitcoin-text {
+            color: #f7931a;
+        }
+        .chat-bubble-model {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            border-radius: 1rem 1rem 1rem 0.5rem;
+        }
+        .chat-bubble-user {
+            background-color: #f7931a;
+            color: white;
+            border-radius: 1rem 1rem 0.5rem 1rem;
+        }
+        /* Ensure focus rings are visible and match the theme */
+        input:focus {
+            outline: none;
+            border-color: #f7931a;
+            box-shadow: 0 0 0 3px rgba(247, 147, 26, 0.5);
+        }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4 flex flex-col items-center">
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-2xl border-t-4 border-orange-500">
-        <h1 class="text-3xl font-bold text-center mb-6 text-gray-800 italic">₿ VALUATOR</h1>
-        
-        <div class="mb-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
-            <label class="block text-sm font-semibold mb-2 text-orange-800 italic">Enter Gemini API Key:</label>
-            <input type="password" id="apiKey" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="Paste key here...">
+<body class="min-h-screen flex items-start justify-center p-4 sm:p-6">
+
+    <div id="app" class="card bg-white w-full lg:w-3/5 xl:w-2/5 p-6 rounded-xl space-y-6 mt-10">
+        <h1 class="text-3xl font-bold text-center border-b pb-3 bitcoin-text">
+            ₿ Interactive Appraiser
+        </h1>
+
+        <!-- Live BTC Rate Display -->
+        <p id="liveRateDisplay" class="text-sm text-center text-gray-600">
+            Current BTC Rate: 
+            <span id="btcRateValue" class="font-bold text-lg bitcoin-text">Loading...</span> 
+            <span id="rateLoader" class="animate-spin inline-block ml-1 h-4 w-4 border-2 border-r-transparent border-bitcoin-orange rounded-full"></span>
+        </p>
+
+        <!-- API Key Input -->
+        <div class="space-y-2">
+            <label for="apiKeyInput" class="block text-sm font-medium text-gray-700">Gemini API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API key here" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bitcoin-orange focus:ring-offset-2">
         </div>
 
-        <div class="space-y-4">
-            <input type="file" id="imageInput" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100">
-            <button onclick="startAppraisal()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl transition">Analyze Asset</button>
-            <div id="output" class="mt-6 p-4 bg-gray-50 rounded-lg min-h-[100px] text-gray-700 border italic whitespace-pre-wrap">Results will appear here...</div>
+        <!-- Image Upload Section (Hidden after start) -->
+        <div id="setupContainer" class="space-y-4 p-4 border-2 border-dashed border-gray-300 rounded-xl">
+            <h2 class="text-lg font-semibold text-gray-800">1. Select Object Photo</h2>
+            <input type="file" id="imageInput" accept="image/*" class="w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-full file:border-0
+                file:text-sm file:font-semibold
+                file:bg-orange-50 file:text-bitcoin-orange
+                hover:file:bg-orange-100
+            " onchange="previewImage(event)">
+
+            <div id="imagePreviewContainer" class="mt-4 hidden justify-center">
+                <img id="imagePreview" class="max-h-64 object-contain rounded-lg border border-gray-200" src="" alt="Image Preview">
+            </div>
+
+            <button id="startButton" class="w-full py-3 text-white font-bold rounded-xl shadow-lg transition duration-150 ease-in-out hover:opacity-90 disabled:opacity-50 flex items-center justify-center space-x-2 bitcoin-orange" disabled onclick="startValuation()">
+                <span id="buttonText">Start Interactive Analysis</span>
+            </button>
         </div>
+        
+        <!-- Chat Interface -->
+        <div id="chatContainer" class="hidden space-y-4 pt-4 border-t border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800">2. Interactive Appraisal</h2>
+            <div id="chatHistory" class="space-y-4 h-80 overflow-y-auto p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <!-- Chat bubbles will be appended here -->
+                <p class="text-center text-gray-400 mt-10">Analysis will start here...</p>
+            </div>
+
+            <div id="chatInputArea" class="flex space-x-2">
+                <input type="text" id="userInput" placeholder="Type your answer here..." class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bitcoin-orange focus:ring-offset-2" onkeydown="if(event.key === 'Enter') sendUserMessage()">
+                <button id="sendButton" class="px-4 py-3 text-white font-bold rounded-xl shadow transition duration-150 ease-in-out hover:opacity-90 disabled:opacity-50 bitcoin-orange" onclick="sendUserMessage()" disabled>
+                    Send
+                </button>
+            </div>
+            <div id="loadingIndicator" class="hidden flex justify-center items-center p-2">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-bitcoin-orange"></div>
+                <p class="ml-3 text-sm text-gray-600">AI is thinking...</p>
+            </div>
+        </div>
+
+        <!-- Disclaimer -->
+        <p class="text-xs text-red-500 pt-4 border-t border-gray-100">
+            *DISCLAIMER: This is a prototype for demonstration only. The BTC valuation is based on a **live** exchange rate and an AI estimate, and is **not** financial advice or a guaranteed accurate appraisal.
+        </p>
     </div>
 
-    <script>
-        async function getBTCPrice() {
-            try {
-                const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
-                const data = await response.json();
-                return parseFloat(data.price);
-            } catch (e) {
-                console.error("BTC Fetch Error:", e);
-                return null;
+    <script type="module">
+        // Global variables provided by the environment
+        const apiKey = ""; 
+        
+        // Constants for BTC API
+        const COINDESK_API_URL = 'https://api.coindesk.com/v1/bpi/currentprice.json';
+        
+        // Application State
+        let currentBtcRate = 0; // Must be > 0 to start
+        let chatHistory = []; 
+        let isAnalysisActive = false;
+        
+        // --- Structured Output Schema for Gemini API ---
+        const responseSchema = {
+            type: "OBJECT",
+            properties: {
+                action: {
+                    type: "STRING",
+                    description: "Must be 'question' if more detail is needed, or 'final_valuation' if enough information is gathered to provide the final BTC conversion."
+                },
+                text: {
+                    type: "STRING",
+                    description: "The next question for the user (if action is 'question'), or the final, detailed valuation (if action is 'final_valuation')."
+                }
+            },
+            required: ["action", "text"]
+        };
+
+        // --- UI Elements ---
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const startButton = document.getElementById('startButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const btcRateValue = document.getElementById('btcRateValue');
+        const rateLoader = document.getElementById('rateLoader');
+        const setupContainer = document.getElementById('setupContainer');
+        const chatContainer = document.getElementById('chatContainer');
+        const chatHistoryDiv = document.getElementById('chatHistory');
+        const userInput = document.getElementById('userInput');
+        const sendButton = document.getElementById('sendButton');
+
+        // --- Utility Functions ---
+
+        const fileToBase64 = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]); 
+                reader.onerror = (error) => reject(error);
+                reader.readAsDataURL(file);
+            });
+        };
+
+        const exponentialBackoff = async (fn, maxRetries = 3) => {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    return await fn();
+                } catch (error) {
+                    if (attempt === maxRetries - 1) throw error;
+                    const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                    // Do not log retries to console
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        };
+
+        // --- Chat UI Functions ---
+
+        /** Renders a message bubble in the chat history. */
+        function addMessageToChat(role, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'flex ' + (role === 'user' ? 'justify-end' : 'justify-start');
+            
+            const textContent = document.createElement('p');
+            textContent.className = 'max-w-[85%] p-3 text-sm shadow-md whitespace-pre-wrap';
+            textContent.textContent = text;
+            
+            if (role === 'user') {
+                textContent.classList.add('chat-bubble-user');
+            } else {
+                textContent.classList.add('chat-bubble-model');
+            }
+            
+            messageDiv.appendChild(textContent);
+            chatHistoryDiv.appendChild(messageDiv);
+            chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight; // Scroll to bottom
+        }
+
+        /** Manages UI state during processing. */
+        function setProcessingState(isProcessing) {
+            userInput.disabled = isProcessing;
+            sendButton.disabled = isProcessing;
+            // Only disable the start button if we are currently analyzing, or if the rate is 0.
+            startButton.disabled = isProcessing || currentBtcRate === 0 || imageInput.files.length === 0;
+            if (isProcessing) {
+                loadingIndicator.classList.remove('hidden');
+            } else {
+                loadingIndicator.classList.add('hidden');
             }
         }
 
-        async function startAppraisal() {
-            const key = document.getElementById('apiKey').value;
-            const file = document.getElementById('imageInput').files[0];
-            const output = document.getElementById('output');
+        // --- Live Bitcoin Rate Logic (Grounded Fallback Implemented) ---
 
-            if (!key || !file) return alert("Key and Image required.");
+        /** Uses Gemini with Google Search grounding to find the current BTC rate. */
+        async function getGroundedBtcRate() {
+            const currentApiKey = apiKeyInput.value || apiKey;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${currentApiKey}`;
+            
+            // System instruction to extract ONLY the rate number
+            const systemPrompt = "You are a specialized financial parser. Find the current market price of 1 Bitcoin (BTC) in US Dollars (USD) using the Google Search tool. Respond ONLY with the clean numerical value (e.g., 65432.21). Do not include currency symbols, commas, or any other text.";
+            const userQuery = "Current Bitcoin (BTC) price in USD";
 
-            output.innerText = "Processing...";
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                tools: [{ "google_search": {} }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
 
-            const btcPrice = await getBTCPrice();
-            if (!btcPrice) { 
-                output.innerText = "Error: Could not reach price API."; 
-                return; 
-            }
+            const executeFetch = async () => {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Grounded API call failed with status ${response.status}`);
+                }
+                const result = await response.json();
+                const rateText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (!rateText) {
+                    throw new Error("No text response from Gemini grounding.");
+                }
+                
+                // Clean the text to ensure it's a number
+                const cleanRate = parseFloat(rateText.replace(/[^0-9.]/g, ''));
+                if (isNaN(cleanRate) || cleanRate <= 0) {
+                    throw new Error("Invalid or zero rate returned from grounding.");
+                }
+                return cleanRate;
+            };
 
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = async () => {
-                const base64Data = reader.result.split(',')[1];
+            return await exponentialBackoff(executeFetch);
+        }
+
+        /** Fetches the current BTC to USD exchange rate using primary API, then Gemini as fallback. */
+        async function getLiveBtcRate() {
+            rateLoader.classList.remove('hidden');
+            btcRateValue.textContent = 'Fetching...';
+            btcRateValue.classList.remove('text-red-600');
+            startButton.disabled = true;
+            currentBtcRate = 0; // Reset rate
+
+            let rateSource = 'CoinDesk';
+
+            try {
+                // 1. Try CoinDesk (Primary, fast)
+                const executeCoindeskFetch = async () => {
+                    const response = await fetch(COINDESK_API_URL);
+                    if (!response.ok) throw new Error(`CoinDesk status: ${response.status}`);
+                    return response.json();
+                };
+
+                const data = await exponentialBackoff(executeCoindeskFetch);
+                const rate = data?.bpi?.USD?.rate_float; 
+
+                if (!rate || typeof rate !== 'number' || rate <= 0) {
+                    throw new Error("Invalid rate data structure from CoinDesk.");
+                }
+                currentBtcRate = rate;
+
+            } catch (error) {
+                console.warn(`CoinDesk failed: ${error.message}. Falling back to Gemini/Google Search.`);
+                rateSource = 'Gemini/Google Search';
                 
                 try {
-                    const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${key}`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({
-                            contents: [{ parts: [
-                                { text: `Appraise this item. Provide market value in USD and convert to BTC at $${btcPrice} per coin.` },
-                                { inline_data: { mime_type: file.type, data: base64Data } }
-                            ]}]
-                        })
-                    });
+                    // 2. Fallback to Gemini with Google Search grounding
+                    currentBtcRate = await getGroundedBtcRate();
 
-                    const result = await res.json();
+                } catch (fallbackError) {
+                    console.error("BTC Rate Error: Both primary and fallback failed.", fallbackError);
+                    currentBtcRate = 0; 
+                    btcRateValue.textContent = `Error fetching rate. Please check your API key or network.`;
+                    btcRateValue.classList.add('text-red-600');
+                    rateLoader.classList.add('hidden');
+                    return; // Stop here on complete failure
+                }
+            }
 
-                    if (result.candidates && result.candidates.length > 0) {
-                        output.innerText = result.candidates[0].content.parts[0].text;
-                    } else if (result.error) {
-                        output.innerText = "API Error: " + result.error.message;
-                    } else {
-                        output.innerText = "The model could not generate a response. This may be due to safety filters or an empty response.";
+            // Success (from either source)
+            const formatter = new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+            btcRateValue.textContent = `${formatter.format(currentBtcRate)} (${rateSource})`;
+            
+            if (imageInput.files.length > 0) {
+                startButton.disabled = false;
+            }
+            rateLoader.classList.add('hidden');
+        }
+
+        // --- Core Valuation Functions ---
+
+        /** Handles the initial call with the image. */
+        window.startValuation = async function() {
+            const file = imageInput.files[0];
+            const currentApiKey = apiKeyInput.value || apiKey;
+
+            if (currentBtcRate === 0) {
+                chatHistoryDiv.innerHTML = '<p class="text-center text-red-500">Cannot start: The live BTC rate is currently unavailable. Please refresh the page.</p>';
+                return;
+            }
+
+            if (!file) {
+                chatHistoryDiv.innerHTML = '<p class="text-center text-red-500">Please select an image first.</p>';
+                return;
+            }
+
+            // UI Setup
+            isAnalysisActive = true;
+            setupContainer.classList.add('hidden');
+            chatContainer.classList.remove('hidden');
+            chatHistoryDiv.innerHTML = ''; // Clear initial message
+            
+            addMessageToChat('user', `Analyzing object based on this photo.`);
+            setProcessingState(true);
+
+            try {
+                const base64Data = await fileToBase64(file);
+                const mimeType = file.type;
+                
+                // 1. Initial Prompt: Identify, estimate, and ask questions.
+                const initialPrompt = `
+                    You are a conversational asset appraiser. Your task is to identify the object in the image, provide an *initial* rough market value estimate in USD, and then generate **one single, most important question** that is required to refine the value.
+
+                    The conversion rate for Bitcoin is 1 BTC = $${currentBtcRate.toFixed(2)} USD.
+
+                    Your response MUST be a JSON object conforming to the schema provided. The 'text' property must contain the question. Do not provide the final valuation yet.
+                    
+                    Initial analysis: The object appears to be a [Object Name/Description]. I estimate a preliminary value between $[Low Estimate] and $[High Estimate] USD.
+                    
+                    Based on this, what is the single most critical piece of information needed to narrow down the value?
+                `;
+                
+                // Construct the first, multimodal payload
+                chatHistory = [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: initialPrompt },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType,
+                                    data: base64Data
+                                }
+                            }
+                        ]
                     }
+                ];
 
-                } catch (err) { 
-                    output.innerText = "Error: " + err.message; 
+                await makeApiCall();
+
+            } catch (error) {
+                console.error("Valuation Error:", error);
+                addMessageToChat('model', `An unexpected error occurred: ${error.message}. Please restart the analysis.`);
+                setProcessingState(false);
+            }
+        };
+
+        /** Handles subsequent calls with user text input. */
+        window.sendUserMessage = async function() {
+            const userMessage = userInput.value.trim();
+            if (!userMessage) return;
+
+            // 1. Update UI and History for User message
+            addMessageToChat('user', userMessage);
+            chatHistory.push({ role: 'user', parts: [{ text: userMessage }] });
+            userInput.value = '';
+            setProcessingState(true);
+
+            // 2. Define the continuing system instruction
+            const continuingInstruction = `
+                You are a conversational asset appraiser. The current Bitcoin rate is 1 BTC = $${currentBtcRate.toFixed(2)} USD.
+
+                Based on the user's latest answer, decide your next action:
+
+                - If you have enough information to confidently provide a refined market value, set 'action' to 'final_valuation'. The 'text' should contain the final, detailed valuation, clearly showing: **Object Identified**, **Final Estimated USD Value**, **Final Estimated BTC Value**, and the **BTC Exchange Rate Used**. Format the response clearly using Markdown list items and bold text for clarity. Once you provide this, the conversation ends.
+                - If you still need more detail (max 2 more questions total), set 'action' to 'question'. The 'text' should contain your next single question for the user.
+
+                Do not repeat previous questions. Always respond in the requested JSON format.
+            `;
+            
+            await makeApiCall(continuingInstruction);
+        };
+
+        /** Executes the Gemini API call with structured output. */
+        async function makeApiCall(systemInstructionText) {
+            const currentApiKey = apiKeyInput.value || apiKey;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${currentApiKey}`;
+
+            const payload = {
+                contents: chatHistory,
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema,
+                },
+                systemInstruction: {
+                    parts: [{ text: systemInstructionText || `You are a conversational asset appraiser. The current Bitcoin rate is 1 BTC = $${currentBtcRate.toFixed(2)} USD. Always respond in the requested JSON format. Be thorough and polite.` }]
                 }
             };
+            
+            try {
+                const executeFetch = async () => {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                         const errorBody = await response.json();
+                         console.error("API Error Response:", errorBody);
+                         throw new Error(`API call failed with status ${response.status}: ${errorBody.error?.message || 'Unknown error'}`);
+                    }
+                    return response.json();
+                };
+
+                const result = await exponentialBackoff(executeFetch);
+
+                const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                let parsedResponse;
+
+                try {
+                    parsedResponse = JSON.parse(responseText);
+                } catch (e) {
+                    throw new Error("Received non-JSON response from AI. Response: " + responseText.substring(0, 100) + '...');
+                }
+
+                if (!parsedResponse || !parsedResponse.action || !parsedResponse.text) {
+                    throw new Error("Invalid structured response from AI.");
+                }
+                
+                // 2. Update History and UI for Model Response
+                const modelMessage = parsedResponse.text;
+                chatHistory.push({ role: 'model', parts: [{ text: modelMessage }] });
+                addMessageToChat('model', modelMessage);
+
+                // 3. Check for final valuation
+                if (parsedResponse.action === 'final_valuation') {
+                    addMessageToChat('model', "--- APPRAISAL COMPLETE ---");
+                    // Disable further input
+                    userInput.placeholder = "Appraisal complete. Start a new analysis to continue.";
+                    setProcessingState(false);
+                    isAnalysisActive = false;
+                    sendButton.disabled = true;
+                }
+
+            } catch (error) {
+                console.error("API Processing Error:", error);
+                addMessageToChat('model', `Error: ${error.message}. Please try again or start a new analysis.`);
+            } finally {
+                setProcessingState(false);
+            }
         }
+
+
+        // --- Initialization ---
+
+        // Enable start button if rate is loaded and image is selected
+        window.previewImage = function(event) {
+            if (event.target.files && event.target.files[0]) {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    imagePreviewContainer.classList.remove('hidden');
+                    imagePreviewContainer.classList.add('flex');
+                    // Enable start button only if both rate is loaded AND image is selected
+                    if (currentBtcRate !== 0) {
+                        startButton.disabled = false;
+                    }
+                }
+                reader.readAsDataURL(file);
+            } else {
+                startButton.disabled = true;
+                imagePreviewContainer.classList.add('hidden');
+                imagePreviewContainer.classList.remove('flex');
+                imagePreview.src = "";
+            }
+        };
+
+        // Fetch the rate immediately on load and enable start button if image is ready
+        window.onload = async function() {
+            await getLiveBtcRate();
+            // Check again after fetch: if rate is available AND image is loaded, enable button
+            if (currentBtcRate !== 0 && imageInput.files.length > 0) {
+                 startButton.disabled = false;
+            }
+        };
+
     </script>
 </body>
 </html>
+
+
